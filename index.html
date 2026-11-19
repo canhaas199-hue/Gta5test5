@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Los Santos V - Authentic GTA 5 Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:ital,wght@0,600;0,700;1,700&family=Oswald:wght@500;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #070b14;
+            font-family: 'Inter', sans-serif;
+        }
+        body.game-active {
+            touch-action: none;
+        }
+        #menuOverlay, #shopModal, #weaponWheelOverlay, #charWheelOverlay {
+            touch-action: pan-y;
+            overscroll-behavior: contain;
+        }
+        canvas#gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            transition: filter 0.35s ease;
+        }
+        .gta-pricedown {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.03em;
+        }
+        .gta-street {
+            font-family: 'Oswald', sans-serif;
+            letter-spacing: 0.05em;
+        }
+        .gta-tech {
+            font-family: 'Chakra Petch', sans-serif;
+        }
+        .text-outline-gta {
+            text-shadow:
+                2px 2px 0px #000,
+               -2px -2px 0px #000,
+                2px -2px 0px #000,
+               -2px 2px 0px #000,
+                0px 4px 14px rgba(0, 0, 0, 0.95);
+        }
+        .star-active {
+            color: #ffffff;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+            animation: wantedBlink 0.55s infinite alternate;
+        }
+        .star-inactive {
+            color: rgba(255, 255, 255, 0.18);
+        }
+        @keyframes wantedBlink {
+            0% { color: #ffffff; transform: scale(1); }
+            50% { color: #38bdf8; transform: scale(1.12); }
+            100% { color: #ef4444; transform: scale(1.12); }
+        }
+        @keyframes gtaBannerSlide {
+            0% { opacity: 0; transform: scaleY(0.2); }
+            12% { opacity: 1; transform: scaleY(1); }
+            88% { opacity: 1; transform: scaleY(1); }
+            100% { opacity: 0; transform: scaleY(0.8); }
+        }
+        .gta-full-banner {
+            animation: gtaBannerSlide 3.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .wasted-filter {
+            filter: grayscale(92%) contrast(135%) brightness(75%);
+        }
+        .snapmatic-filter {
+            filter: sepia(35%) saturate(155%) contrast(115%);
+        }
+        .special-vignette-michael {
+            box-shadow: inset 0 0 115px rgba(56, 189, 248, 0.68);
+        }
+        .special-vignette-franklin {
+            box-shadow: inset 0 0 115px rgba(74, 222, 128, 0.68);
+        }
+        .special-vignette-trevor {
+            box-shadow: inset 0 0 125px rgba(249, 115, 22, 0.78);
+        }
+        .gta-radar-box {
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.92), inset 0 0 0 2px rgba(255, 255, 255, 0.16);
+        }
+    </style>
+</head>
+<body class="relative text-white">
+
+    <!-- Spezialfähigkeits-Vignette -->
+    <div id="specialOverlay" class="fixed inset-0 pointer-events-none z-10 transition-all duration-300"></div>
+
+    <!-- 3D WebGL Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- GTA 5 Fadenkreuz -->
+    <div id="crosshair" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden z-20">
+        <div id="crosshairDot" class="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_4px_#000] transition-transform duration-75"></div>
+        <div id="hitX" class="absolute -inset-2 text-red-500 font-extrabold text-xs flex items-center justify-center opacity-0 transition-opacity duration-75">✕</div>
+    </div>
+
+    <!-- Radio-Sender Einblendung -->
+    <div id="radioBanner" class="fixed top-14 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md border border-white/20 px-5 py-2 rounded-full flex items-center gap-3 pointer-events-none hidden z-20 shadow-2xl">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-sm shadow">📻</div>
+        <div>
+            <div class="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Los Santos Radio [R]</div>
+            <div id="radioStationName" class="gta-street text-base font-bold text-amber-400 uppercase">Radio Los Santos</div>
+        </div>
+    </div>
+
+    <!-- GTA 5 Interaktions-Hinweis Oben Links -->
+    <div id="actionPrompt" class="fixed top-4 left-4 bg-black/85 border-l-4 border-white px-4 py-2.5 rounded-r-lg text-xs md:text-sm font-medium tracking-wide hidden z-20 shadow-2xl max-w-xs">
+        Drücke <span class="bg-white text-black px-1.5 py-0.5 rounded font-bold mx-1">E</span> um einzusteigen.
+    </div>
+
+    <!-- WASTED / MISSION PASSED OVERLAY -->
+    <div id="eventBanner" class="fixed inset-0 flex items-center justify-center pointer-events-none z-40 hidden">
+        <div class="w-full bg-gradient-to-r from-transparent via-black/90 to-transparent py-7 md:py-10 border-y border-white/15 text-center gta-full-banner">
+            <h1 id="bannerTitle" class="gta-pricedown text-6xl md:text-8xl uppercase tracking-wider text-outline-gta text-red-500">WASTED</h1>
+            <p id="bannerSub" class="gta-street text-lg md:text-2xl uppercase tracking-widest text-gray-200 mt-1">Du wurdest ausgeschaltet</p>
+        </div>
+    </div>
+
+    <!-- HUD: Oben Rechts -->
+    <div id="hudTopRight" class="fixed top-3 right-3 flex flex-col items-end gap-1 pointer-events-none z-20">
+        <div id="wantedStars" class="flex gap-1 text-2xl md:text-3xl tracking-tight">
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+            <span class="star-inactive">★</span>
+        </div>
+
+        <div id="moneyDisplay" class="gta-pricedown text-3xl md:text-4xl text-emerald-400 text-outline-gta leading-none">
+            $2.500
+        </div>
+
+        <div class="flex items-center gap-2 mt-1">
+            <button id="hudPhoneBtn" title="iFruit Smartphone [T]" class="pointer-events-auto bg-black/75 hover:bg-black/95 border border-white/20 rounded-xl p-2 text-base shadow-lg transition">
+                📱
+            </button>
+            <button id="hudWeaponBtn" class="pointer-events-auto bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/15 rounded-xl px-3 py-1.5 flex items-center gap-2.5 shadow-lg transition">
+                <div id="weaponIcon" class="text-xl">✊</div>
+                <div class="text-right">
+                    <div id="weaponName" class="gta-street text-xs uppercase text-gray-300 font-bold">Faust [Tab]</div>
+                    <div id="weaponAmmo" class="gta-tech text-xs font-bold text-white">UNBEGRENZT</div>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- HUD: Oben Mitte (Aktive Mission) -->
+    <div id="missionTracker" class="fixed top-3 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md border-b-2 border-amber-400 px-5 py-2 rounded-xl text-center pointer-events-none z-20 hidden shadow-xl max-w-md w-11/12">
+        <div class="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Aktive Mission</div>
+        <div id="missionTitle" class="gta-street uppercase font-bold text-base text-white">Kurierfahrt zum Hafen</div>
+        <div class="text-xs text-gray-300 mt-0.5">Folge der gelben GPS-Route! Zeit: <span id="missionTimer" class="text-amber-300 font-bold">45s</span></div>
+    </div>
+
+    <!-- HUD: Unten Links -->
+    <div id="hudBottomLeft" class="fixed bottom-3 left-3 flex flex-col pointer-events-none z-20">
+        <div class="gta-radar-box relative w-40 h-28 md:w-56 md:h-40 rounded-t-2xl overflow-hidden bg-slate-950 border-x-2 border-t-2 border-black">
+            <canvas id="minimapCanvas" width="240" height="175" class="w-full h-full block"></canvas>
+            <div class="absolute top-1.5 left-1/2 -translate-x-1/2 bg-black/90 text-[9px] font-extrabold px-1.5 rounded text-white border border-white/30">N</div>
+            <div id="timeDisplay" class="absolute bottom-1.5 right-2 bg-black/75 px-1.5 py-0.5 rounded text-[10px] font-bold text-gray-200">17:45</div>
+        </div>
+        <div class="w-40 md:w-56 grid grid-cols-12 gap-1 bg-black p-1.5 rounded-b-xl border-x-2 border-b-2 border-black shadow-2xl">
+            <div class="col-span-6 h-2 bg-emerald-950 overflow-hidden rounded-sm">
+                <div id="healthBar" class="h-full bg-emerald-500 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+            <div class="col-span-3 h-2 bg-sky-950 overflow-hidden rounded-sm">
+                <div id="armorBar" class="h-full bg-sky-400 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+            <div class="col-span-3 h-2 bg-amber-950 overflow-hidden rounded-sm">
+                <div id="specialBar" class="h-full bg-amber-400 transition-all duration-150" style="width: 100%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD: Unten Rechts -->
+    <div id="hudBottomRight" class="fixed bottom-3 right-3 flex flex-col items-end pointer-events-none z-20">
+        <div id="vehicleHud" class="hidden mb-1 bg-black/70 backdrop-blur-sm border border-white/15 rounded-xl px-3 py-1.5 text-right">
+            <div class="flex items-baseline justify-end gap-1">
+                <span id="speedDisplay" class="gta-pricedown text-3xl text-white">0</span>
+                <span class="text-[10px] font-bold text-gray-400">KM/H</span>
+            </div>
+        </div>
+
+        <div id="vehicleNameBanner" class="gta-street uppercase text-base md:text-lg font-bold text-amber-400 text-outline-gta hidden">
+            Obey Tailgater – Limousine
+        </div>
+        <div id="streetNameDisplay" class="gta-street uppercase text-lg md:text-2xl font-bold text-white text-outline-gta leading-tight">
+            VESPUCCI BOULEVARD
+        </div>
+        <div id="districtNameDisplay" class="gta-street uppercase text-xs md:text-base font-medium text-gray-300 text-outline-gta leading-tight">
+            DOWNTOWN LOS SANTOS
+        </div>
+
+        <button id="hudCharBtn" class="pointer-events-auto mt-1.5 bg-black/80 hover:bg-black border border-white/25 rounded-full pl-1.5 pr-3 py-1 flex items-center gap-2 shadow-xl transition">
+            <span id="charAvatarHud" class="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center text-xs font-bold text-black">M</span>
+            <span id="charNameHud" class="gta-street uppercase text-xs font-bold text-white">MICHAEL</span>
+            <span class="text-[10px] text-gray-400">[C]</span>
+        </button>
+    </div>
+
+    <!-- iFRUIT SMARTPHONE OVERLAY (Taste T) -->
+    <div id="ifruitPhone" class="fixed bottom-24 right-4 w-64 bg-slate-900 border-4 border-slate-700 rounded-[2rem] p-3.5 shadow-2xl z-30 hidden">
+        <div class="w-12 h-1 bg-slate-600 rounded-full mx-auto mb-2"></div>
+        <div class="bg-gradient-to-b from-sky-500 via-indigo-600 to-purple-800 rounded-2xl p-3 text-white shadow-inner">
+            <div class="flex justify-between items-center text-[10px] font-bold opacity-90 mb-3">
+                <span>iFruit 9iX</span>
+                <span id="phoneClock">17:45</span>
+                <span>5G 🔋</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2.5 text-center my-2">
+                <button onclick="phoneQuickMission()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">💼</div>
+                    <span class="text-[10px] font-bold">Schnelljob</span>
+                </button>
+                <button onclick="phoneCallMechanic()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🏎️</div>
+                    <span class="text-[10px] font-bold">Mechaniker</span>
+                </button>
+                <button onclick="phoneCallLester()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-rose-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🕵️</div>
+                    <span class="text-[10px] font-bold">Lester ($500)</span>
+                </button>
+                <button onclick="phoneToggleSnapmatic()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-cyan-500 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">📸</div>
+                    <span class="text-[10px] font-bold">Snapmatic</span>
+                </button>
+                <button onclick="phoneRefillArmor()" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-600 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">🛡️</div>
+                    <span class="text-[10px] font-bold">Panzerung</span>
+                </button>
+                <button onclick="toggleIFruitPhone(false)" class="flex flex-col items-center gap-1 group">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-800 group-hover:scale-105 transition flex items-center justify-center text-xl shadow-md">✕</div>
+                    <span class="text-[10px] font-bold">Schließen</span>
+                </button>
+            </div>
+        </div>
+        <button onclick="toggleIFruitPhone(false)" class="w-8 h-8 rounded-full border-2 border-slate-600 mx-auto mt-2.5 block hover:bg-slate-800"></button>
+    </div>
+
+    <!-- GTA 5 WAFFENRAD (Taste Tab) -->
+    <div id="weaponWheelOverlay" class="fixed inset-0 bg-black/65 backdrop-blur-sm flex items-center justify-center z-30 hidden">
+        <div class="relative w-80 h-80 md:w-96 md:h-96 rounded-full border-4 border-white/15 bg-slate-950/90 flex items-center justify-center shadow-2xl">
+            <div class="text-center pointer-events-none px-6">
+                <div id="wheelSelectedName" class="gta-street text-2xl uppercase font-bold text-white">Faust</div>
+                <div id="wheelSelectedAmmo" class="text-xs text-amber-400 font-bold mb-2">Unbegrenzt</div>
+                <div class="space-y-1 text-[9px] uppercase text-gray-400 text-left w-32 mx-auto">
+                    <div>Schaden <div class="h-1 bg-white/15 rounded"><div id="statDamage" class="h-full bg-white" style="width:30%"></div></div></div>
+                    <div>Feuerrate <div class="h-1 bg-white/15 rounded"><div id="statRate" class="h-full bg-white" style="width:50%"></div></div></div>
+                    <div>Reichweite <div class="h-1 bg-white/15 rounded"><div id="statRange" class="h-full bg-white" style="width:20%"></div></div></div>
+                </div>
+            </div>
+            <div id="weaponWheelSlots" class="absolute inset-0"></div>
+        </div>
+    </div>
+
+    <!-- GTA 5 CHARAKTERRAD (Taste C) -->
+    <div id="charWheelOverlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-30 hidden">
+        <div class="relative w-80 h-80 md:w-96 md:h-96 rounded-full border-4 border-white/20 bg-slate-950/90 flex items-center justify-center shadow-2xl">
+            <div class="text-center pointer-events-none px-4">
+                <div class="text-[10px] uppercase tracking-widest text-gray-400">Protagonist</div>
+                <div id="charWheelCenterName" class="gta-pricedown text-2xl text-white">MICHAEL</div>
+                <div id="charWheelCenterSpec" class="text-[10px] text-sky-400 font-semibold mt-0.5">Bullet-Time Fokus</div>
+            </div>
+
+            <button onclick="switchCharacter(1)" onmouseenter="previewCharWheel(1)" class="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-24 rounded-full bg-emerald-950/90 hover:bg-emerald-600 border-2 border-emerald-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🧢</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Franklin</span>
+            </button>
+
+            <button onclick="switchCharacter(0)" onmouseenter="previewCharWheel(0)" class="absolute left-3 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-sky-950/90 hover:bg-sky-600 border-2 border-sky-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🕶️</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Michael</span>
+            </button>
+
+            <button onclick="switchCharacter(2)" onmouseenter="previewCharWheel(2)" class="absolute right-3 top-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-orange-950/90 hover:bg-orange-600 border-2 border-orange-400 flex flex-col items-center justify-center transition transform hover:scale-105 shadow-lg">
+                <span class="text-3xl">🔥</span>
+                <span class="gta-street text-xs font-bold text-white uppercase mt-0.5">Trevor</span>
+            </button>
+
+            <button onclick="closeCharWheel()" class="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-gray-300">
+                Abbrechen
+            </button>
+        </div>
+    </div>
+
+    <!-- AMMU-NATION & LS CUSTOMS SHOP MODAL -->
+    <div id="shopModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-40 hidden">
+        <div class="bg-slate-900 border border-white/20 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-white/10 pb-3 mb-4">
+                <div>
+                    <span id="shopSubtitle" class="text-[10px] uppercase tracking-widest text-amber-400 font-bold">Los Santos Shop</span>
+                    <h2 id="shopTitle" class="gta-pricedown text-3xl text-white">AMMU-NATION</h2>
+                </div>
+                <button onclick="closeShop()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold">✕</button>
+            </div>
+            <div id="shopItems" class="space-y-2.5 mb-4"></div>
+            <button onclick="closeShop()" class="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-bold">Verlassen</button>
+        </div>
+    </div>
+
+    <!-- Start- / Pause-Menü Overlay (Ohne Scroll-Bounce im Querformat) -->
+    <div id="menuOverlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+        <div class="bg-slate-900/95 border border-white/15 rounded-2xl sm:rounded-3xl max-w-2xl w-full p-3.5 sm:p-6 shadow-2xl my-auto">
+            <div class="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
+                <div>
+                    <span class="text-[9px] sm:text-xs font-bold uppercase tracking-widest text-amber-400">Grand Theft Auto V Web-Edition</span>
+                    <h1 class="gta-pricedown text-2xl sm:text-5xl text-white mt-0.5 leading-none">LOS SANTOS <span class="text-emerald-400">V</span></h1>
+                </div>
+                <button type="button" id="soundToggleBtn" class="bg-white/10 hover:bg-white/20 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shrink-0">
+                    <span id="soundIcon">🔊</span> <span id="soundText">Ton: AN</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3.5 mb-3 text-xs">
+                <div class="bg-black/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-white/5">
+                    <h3 class="font-bold text-amber-400 uppercase text-[10px] sm:text-[11px] tracking-wider mb-1">🚶 Protagonisten & Kampf</h3>
+                    <ul class="space-y-0.5 sm:space-y-1 text-gray-300 text-[11px] sm:text-xs">
+                        <li class="flex justify-between gap-2"><span>Bewegen / Sprint</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">W A S D / Shift</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Schießen / Schlagen</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">Linksklick</kbd></li>
+                        <li class="flex justify-between gap-2"><span>GTA V Waffenrad</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">Tab / 1-5</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Charakterrad (M/F/T)</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">C</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Fokus / iFruit</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">Q / T</kbd></li>
+                    </ul>
+                </div>
+
+                <div class="bg-black/40 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-white/5">
+                    <h3 class="font-bold text-emerald-400 uppercase text-[10px] sm:text-[11px] tracking-wider mb-1">🏎️ Fahrzeuge & Los Santos</h3>
+                    <ul class="space-y-0.5 sm:space-y-1 text-gray-300 text-[11px] sm:text-xs">
+                        <li class="flex justify-between gap-2"><span>Touch-Steuerung</span> <span class="text-white font-semibold shrink-0">Links Stick + Rechts Wischen</span></li>
+                        <li class="flex justify-between gap-2"><span>Ein- / Aussteigen / Shop</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">E / Auto</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Handbremse / Drift</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">Leertaste</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Autoradio wechseln</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">R / Radio</kbd></li>
+                        <li class="flex justify-between gap-2"><span>Ammu-Nation / LS Customs</span> <kbd class="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white shrink-0">Rote & Blaue Marker</kbd></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2">
+                <button type="button" id="startGameBtn" class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold py-2.5 sm:py-3 px-5 rounded-xl sm:rounded-2xl text-sm sm:text-base uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition transform active:scale-95">
+                    ▶ STORY-MODUS STARTEN
+                </button>
+                <button type="button" id="spawnCarBtn" class="bg-white/10 hover:bg-white/20 text-white font-semibold py-2.5 sm:py-3 px-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm transition">
+                    🏎️ Supersportwagen rufen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobileJoystickZone" class="fixed bottom-40 left-4 w-24 h-24 rounded-full bg-white/10 border border-white/20 md:hidden z-30 flex items-center justify-center">
+        <div id="mobileJoystickKnob" class="w-10 h-10 rounded-full bg-white/40 border border-white shadow-lg"></div>
+    </div>
+
+    <div id="mobileControls" class="fixed bottom-40 right-3 grid grid-cols-2 gap-2 md:hidden z-30">
+        <button type="button" id="btnMobileSpecial" class="w-12 h-12 rounded-full bg-amber-400/90 text-black font-extrabold text-[11px] shadow-lg">Fokus</button>
+        <button type="button" id="btnMobileAction" class="w-12 h-12 rounded-full bg-emerald-500/90 text-black font-extrabold text-[11px] shadow-lg">E / Auto</button>
+        <button type="button" id="btnMobileRadio" class="w-12 h-12 rounded-full bg-purple-600/85 text-white font-bold text-[11px] shadow-lg">Radio</button>
+        <button type="button" id="btnMobileShoot" class="w-12 h-12 rounded-full bg-red-600/90 text-white font-extrabold text-[11px] shadow-lg">Feuer</button>
+    </div>
+
+<script>
+// ==========================================
+// 1. WEB AUDIO API SOUND & RADIO ENGINE
+// ==========================================
+class SoundEngine {
+    constructor() {
+        this.ctx = null;
+        this.enabled = true;
+        this.engineOsc = null;
+        this.engineGain = null;
+        this.sirenInterval = null;
+        this.sirenStep = 0;
+
+        this.radioStations = [
+            { name: 'Radio Aus', bpm: 0, notes: [] },
+            { name: 'Radio Los Santos', bpm: 96, notes: [110, 110, 130.8, 146.8, 110, 164.8, 146.8, 130.8] },
+            { name: 'Non-Stop-Pop FM', bpm: 122, notes: [261.6, 329.6, 392.0, 329.6, 293.7, 349.2, 440.0, 392.0] },
+            { name: 'Los Santos Rock Radio', bpm: 134, notes: [146.8, 146.8, 220.0, 196.0, 146.8, 174.6, 196.0, 220.0] },
+            { name: 'West Coast Classics', bpm: 92, notes: [98.0, 116.5, 130.8, 146.8, 130.8, 116.5, 98.0, 87.3] }
+        ];
+        this.currentStation = 0;
+        this.radioTimer = null;
+        this.radioStep = 0;
+    }
+
+    init() {
+        try {
+            if (!this.ctx) {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) this.ctx = new AudioCtx();
+            }
+            if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+        } catch (e) {}
+    }
+
+    toggle() {
+        this.enabled = !this.enabled;
+        if (!this.enabled) {
+            this.stopEngine();
+            this.stopSiren();
+            this.stopRadio();
+        } else if (state.inVehicle && this.currentStation > 0) {
+            this.startRadio();
+        }
+        return this.enabled;
+    }
+
+    cycleRadio() {
+        this.init();
+        this.currentStation = (this.currentStation + 1) % this.radioStations.length;
+        const station = this.radioStations[this.currentStation];
+
+        const banner = document.getElementById('radioBanner');
+        document.getElementById('radioStationName').textContent = station.name;
+        banner.classList.remove('hidden');
+        clearTimeout(this.bannerHideTimeout);
+        this.bannerHideTimeout = setTimeout(() => banner.classList.add('hidden'), 2600);
+
+        this.stopRadio();
+        if (this.currentStation > 0 && this.enabled && state.inVehicle) this.startRadio();
+    }
+
+    startRadio() {
+        this.stopRadio();
+        const station = this.radioStations[this.currentStation];
+        if (!station || station.bpm === 0 || !this.enabled || !this.ctx) return;
+
+        const stepMs = (60 / station.bpm / 2) * 1000;
+        this.radioTimer = setInterval(() => {
+            if (!this.enabled || !this.ctx || !state.inVehicle) return;
+            const now = this.ctx.currentTime;
+            const freq = station.notes[this.radioStep % station.notes.length];
+
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = this.currentStation === 3 ? 'sawtooth' : (this.currentStation === 1 ? 'triangle' : 'sine');
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.055, now);
+            gain.gain.exponentialRampToValueAtTime(0.002, now + (stepMs / 1000) * 0.9);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + (stepMs / 1000) * 0.92);
+
+            if (this.radioStep % 2 === 0) {
+                const kick = this.ctx.createOscillator();
+                const kGain = this.ctx.createGain();
+                kick.type = 'sine';
+                kick.frequency.setValueAtTime(125, now);
+                kick.frequency.exponentialRampToValueAtTime(35, now + 0.11);
+                kGain.gain.setValueAtTime(0.09, now);
+                kGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                kick.connect(kGain);
+                kGain.connect(this.ctx.destination);
+                kick.start(now);
+                kick.stop(now + 0.12);
+            }
+            this.radioStep++;
+        }, stepMs);
+    }
+
+    stopRadio() {
+        if (this.radioTimer) {
+            clearInterval(this.radioTimer);
+            this.radioTimer = null;
+        }
+    }
+
+    playShoot(type) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        if (type === 0) {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(145, now);
+            osc.frequency.exponentialRampToValueAtTime(38, now + 0.12);
+            gain.gain.setValueAtTime(0.4, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.12);
+            return;
+        }
+
+        if (type === 4) {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(220, now);
+            osc.frequency.exponentialRampToValueAtTime(620, now + 0.35);
+            gain.gain.setValueAtTime(0.32, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.38);
+            return;
+        }
+
+        const dur = type === 1 ? 0.15 : 0.1;
+        const bufferSize = Math.floor(this.ctx.sampleRate * dur);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.028));
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(type === 1 ? 1800 : 2700, now);
+        filter.frequency.exponentialRampToValueAtTime(220, now + dur);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(type === 1 ? 0.48 : 0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+    }
+
+    playExplosion() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.75);
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.18));
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(650, now);
+        filter.frequency.exponentialRampToValueAtTime(55, now + 0.7);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.85, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.74);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+    }
+
+    playCrash(intensity = 0.5) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(95, now);
+        osc.frequency.exponentialRampToValueAtTime(25, now + 0.25);
+        gain.gain.setValueAtTime(Math.min(0.6, intensity * 0.5), now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    playCash() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        [880, 1318.5].forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+            gain.gain.setValueAtTime(0.25, now + idx * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.25);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.08);
+            osc.stop(now + idx * 0.08 + 0.25);
+        });
+    }
+
+    updateEngine(speedRatio, inCar) {
+        if (!this.enabled || !this.ctx || !inCar) {
+            this.stopEngine();
+            return;
+        }
+        if (!this.engineOsc) {
+            this.engineOsc = this.ctx.createOscillator();
+            this.engineGain = this.ctx.createGain();
+            this.engineOsc.type = 'sawtooth';
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 340;
+            this.engineOsc.connect(filter);
+            filter.connect(this.engineGain);
+            this.engineGain.connect(this.ctx.destination);
+            this.engineGain.gain.value = 0.07;
+            this.engineOsc.start();
+        }
+        const targetFreq = 40 + Math.abs(speedRatio) * 125;
+        this.engineOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.08);
+        this.engineGain.gain.setTargetAtTime(0.05 + Math.abs(speedRatio) * 0.06, this.ctx.currentTime, 0.08);
+    }
+
+    stopEngine() {
+        if (this.engineOsc) {
+            try { this.engineOsc.stop(); } catch (e) {}
+            this.engineOsc.disconnect();
+            this.engineOsc = null;
+            this.engineGain = null;
+        }
+    }
+
+    updateSiren(active) {
+        if (!this.enabled || !this.ctx || !active) {
+            this.stopSiren();
+            return;
+        }
+        if (!this.sirenInterval) {
+            this.sirenInterval = setInterval(() => {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const freq = this.sirenStep % 2 === 0 ? 760 : 570;
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.005, now + 0.34);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+                this.sirenStep++;
+            }, 370);
+        }
+    }
+
+    stopSiren() {
+        if (this.sirenInterval) {
+            clearInterval(this.sirenInterval);
+            this.sirenInterval = null;
+        }
+    }
+}
+
+const sound = new SoundEngine();
+
+// ==========================================
+// 2. PROZEDURALE HD-TEXTUREN
+// ==========================================
+function createProceduralTextures() {
+    const asphaltCanvas = document.createElement('canvas');
+    asphaltCanvas.width = 256;
+    asphaltCanvas.height = 256;
+    const aCtx = asphaltCanvas.getContext('2d');
+    aCtx.fillStyle = '#1e242b';
+    aCtx.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 4500; i++) {
+        const shade = 22 + Math.floor(Math.random() * 26);
+        aCtx.fillStyle = `rgb(${shade},${shade + 2},${shade + 5})`;
+        aCtx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+    }
+    const asphaltTex = new THREE.CanvasTexture(asphaltCanvas);
+    asphaltTex.wrapS = THREE.RepeatWrapping;
+    asphaltTex.wrapT = THREE.RepeatWrapping;
+    asphaltTex.repeat.set(8, 24);
+
+    const winCanvas = document.createElement('canvas');
+    winCanvas.width = 256;
+    winCanvas.height = 512;
+    const wCtx = winCanvas.getContext('2d');
+    wCtx.fillStyle = '#0f172a';
+    wCtx.fillRect(0, 0, 256, 512);
+
+    const cols = 8;
+    const rows = 16;
+    const padX = 5;
+    const padY = 6;
+    const cellW = 256 / cols;
+    const cellH = 512 / rows;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const rnd = Math.random();
+            if (rnd > 0.62) {
+                wCtx.fillStyle = rnd > 0.85 ? '#fef08a' : '#bae6fd';
+            } else {
+                wCtx.fillStyle = '#1e293b';
+            }
+            wCtx.fillRect(c * cellW + padX, r * cellH + padY, cellW - padX * 2, cellH - padY * 2);
+        }
+    }
+    const buildingTex = new THREE.CanvasTexture(winCanvas);
+    buildingTex.wrapS = THREE.RepeatWrapping;
+    buildingTex.wrapT = THREE.RepeatWrapping;
+
+    const sideCanvas = document.createElement('canvas');
+    sideCanvas.width = 128;
+    sideCanvas.height = 128;
+    const sCtx = sideCanvas.getContext('2d');
+    sCtx.fillStyle = '#94a3b8';
+    sCtx.fillRect(0, 0, 128, 128);
+    sCtx.strokeStyle = '#64748b';
+    sCtx.lineWidth = 2;
+    sCtx.strokeRect(1, 1, 62, 62);
+    sCtx.strokeRect(65, 1, 62, 62);
+    sCtx.strokeRect(1, 65, 62, 62);
+    sCtx.strokeRect(65, 65, 62, 62);
+    const sidewalkTex = new THREE.CanvasTexture(sideCanvas);
+    sidewalkTex.wrapS = THREE.RepeatWrapping;
+    sidewalkTex.wrapT = THREE.RepeatWrapping;
+    sidewalkTex.repeat.set(36, 36);
+
+    return { asphaltTex, buildingTex, sidewalkTex };
+}
+
+const textures = createProceduralTextures();
+
+// ==========================================
+// 3. KONFIGURATION, PROTAGONISTEN & WAFFEN
+// ==========================================
+const ROAD_WIDTH = 18;
+const GRID_COORDS = [-140, -70, 0, 70, 140];
+
+const PROTAGONISTS = [
+    {
+        id: 'michael',
+        name: 'MICHAEL',
+        initial: 'M',
+        avatarBg: 'bg-sky-500',
+        colorHex: 0x1e293b,
+        pantsHex: 0x0f172a,
+        vignetteClass: 'special-vignette-michael',
+        carType: 'tailgater',
+        specialName: 'Bullet-Time Fokus'
+    },
+    {
+        id: 'franklin',
+        name: 'FRANKLIN',
+        initial: 'F',
+        avatarBg: 'bg-emerald-500',
+        colorHex: 0x16a34a,
+        pantsHex: 0x1e3a8a,
+        vignetteClass: 'special-vignette-franklin',
+        carType: 'buffalo',
+        specialName: 'Fahr-Fokus & Nitro-Grip'
+    },
+    {
+        id: 'trevor',
+        name: 'TREVOR',
+        initial: 'T',
+        avatarBg: 'bg-orange-500',
+        colorHex: 0xf8fafc,
+        pantsHex: 0x475569,
+        vignetteClass: 'special-vignette-trevor',
+        carType: 'bodhi',
+        specialName: 'Wut-Modus (Unbesiegbar)'
+    }
+];
+
+const state = {
+    isPlaying: false,
+    charIndex: 0,
+    money: 2500,
+    health: 100,
+    armor: 100,
+    specialEnergy: 100,
+    specialActive: false,
+    wantedLevel: 0,
+    wantedTimer: 0,
+    timeOfDay: 17.75,
+    weaponIndex: 0,
+    weapons: [
+        { name: 'Faust', icon: '✊', ammo: Infinity, maxAmmo: Infinity, damage: 30, fireRate: 0.42, range: 3.4, auto: false, dmgStat: 25, rateStat: 55, rngStat: 15 },
+        { name: 'Pistole 9mm', icon: '🔫', ammo: 72, maxAmmo: 120, damage: 45, fireRate: 0.28, range: 70, auto: false, dmgStat: 45, rateStat: 45, rngStat: 55 },
+        { name: 'Micro-SMG', icon: '💨', ammo: 150, maxAmmo: 300, damage: 26, fireRate: 0.09, range: 55, auto: true, dmgStat: 35, rateStat: 90, rngStat: 45 },
+        { name: 'Karabiner', icon: '🪖', ammo: 180, maxAmmo: 360, damage: 38, fireRate: 0.12, range: 90, auto: true, dmgStat: 65, rateStat: 80, rngStat: 85 },
+        { name: 'RPG Werfer', icon: '🚀', ammo: 5, maxAmmo: 15, damage: 250, fireRate: 1.1, range: 110, auto: false, dmgStat: 100, rateStat: 15, rngStat: 95 }
+    ],
+    lastShotTime: 0,
+    inVehicle: null,
+    cameraYaw: 0,
+    cameraPitch: 0.24,
+    cameraZoomTransition: 0,
+    activeMission: null,
+    snapmaticOn: false
+};
+
+// ==========================================
+// 4. THREE.JS SZENE, RENDERER & GOLDEN-HOUR-LICHT
+// ==========================================
+const canvas = document.getElementById('gameCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.14;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf97316);
+scene.fog = new THREE.FogExp2(0xfb923c, 0.0022);
+
+const hemiLight = new THREE.HemisphereLight(0xfde68a, 0x1e293b, 0.88);
+scene.add(hemiLight);
+
+const sunLight = new THREE.DirectionalLight(0xffedd5, 1.5);
+sunLight.position.set(120, 140, 90);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 20;
+sunLight.shadow.camera.far = 450;
+const d = 190;
+sunLight.shadow.camera.left = -d;
+sunLight.shadow.camera.right = d;
+sunLight.shadow.camera.top = d;
+sunLight.shadow.camera.bottom = -d;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+const sunDisc = new THREE.Mesh(
+    new THREE.SphereGeometry(18, 24, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfffbeb, fog: false })
+);
+scene.add(sunDisc);
+
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 650);
+
+// ==========================================
+// 5. WELT-BAU: LOS SANTOS
+// ==========================================
+const colliders = [];
+const buildingsMinimap = [];
+const stuntRamps = [];
+const streetLampBulbs = [];
+const pickups = [];
+let ferrisWheelGroup = null;
+let waterMesh = null;
+
+function buildWorld() {
+    waterMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1600, 750, 32, 16),
+        new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.14, metalness: 0.6 })
+    );
+    waterMesh.rotation.x = -Math.PI / 2;
+    waterMesh.position.set(0, -0.35, 485);
+    scene.
